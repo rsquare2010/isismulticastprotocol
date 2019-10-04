@@ -1,12 +1,3 @@
-/*
-        demo-udp-03: udp-recv: a simple udp server
-	receive udp messages
-
-        usage:  udp-recv
-
-        Paul Krzyzanowski
-*/
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

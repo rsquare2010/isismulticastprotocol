@@ -1,14 +1,3 @@
-/*
-        demo-udp-03: udp-send: a simple udp client
-	send udp messages
-	This sends a sequence of messages (the # of messages is defined in MSGS)
-	The messages are sent to a port defined in SERVICE_PORT 
-
-        usage:  udp-send
-
-        Paul Krzyzanowski
-*/
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -42,6 +31,30 @@ void serializeDM(DataMessage* sendMessage, char* messageSerialized) {
 //    cout << msgPacket->data << endl;
 //}
 
+void readFromHostFile( char* contents) {
+    FILE *fp;
+    long lSize;
+
+    
+    fp = fopen ( "hostfile.txt" , "r" );
+    if( !fp ) perror("hostfile"),exit(1);
+    
+    fseek( fp , 0L , SEEK_END);
+    lSize = ftell( fp );
+    rewind( fp );
+    
+    contents = calloc( 1, lSize+1 );
+    if( !contents ) fclose(fp),fputs("memory alloc fails",stderr),exit(1);
+    
+    if( 1!=fread( contents , lSize, 1 , fp) )
+        fclose(fp),free(contents),fputs("entire read fails",stderr),exit(1);
+    
+    fclose(fp);
+    
+    printf("file contents: %s", contents);
+//    free(buffer);
+}
+
 int main(int argc, char **argv)
 {
     int option = 0;
@@ -56,6 +69,8 @@ int main(int argc, char **argv)
     char *host = "udptestrecv";
     struct hostent *hp;
     
+    char *filecontents;
+    readFromHostFile(filecontents);
     printf("entered \n");
     AckMessage ackMessages;
     SeqMessage seqMessage;
