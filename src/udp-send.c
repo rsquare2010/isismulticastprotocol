@@ -12,17 +12,7 @@
 
 #define BUFLEN 2048
 #define MSGS 5	/* number of messages to send */
-void serializeDM(DataMessage* sendMessage, char* messageSerialized) {
-    uint32_t temp;
-    temp = htonl(sendMessage->type);
-    memcpy(&messageSerialized[0], &temp, sizeof(temp));
-    temp = htonl(sendMessage->sender);
-    memcpy(&messageSerialized[4], &temp, sizeof(temp));
-    temp = htonl(sendMessage->message_id);
-    memcpy(&messageSerialized[8], &temp, sizeof(temp));
-    temp = htonl(sendMessage->data);
-    memcpy(&messageSerialized[12], &temp, sizeof(temp));
-}
+
 //void printMsg(DataMessage* msgPacket)
 //{
 //    printf("message Type %d",msgPacket->sender);
@@ -148,7 +138,7 @@ int main(int argc, char **argv)
 //        printf("Sending packet %d to %s port %d\n", i, server, SERVICE_PORT);
         sprintf(buf, "This is packet %d", i);
         printf("The message is");
-		if (sendto(fd, messageSerialized, sizeof(messageSerialized), 0, (struct sockaddr *)&servaddr, slen)==-1) {
+		if (sendto(fd, messageSerialized, sizeof(sendMessage), 0, (struct sockaddr *)&servaddr, slen)==-1) {
 			perror("sendto");
 			exit(1);
 		}
