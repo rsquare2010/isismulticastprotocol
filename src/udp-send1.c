@@ -12,13 +12,13 @@
 #include <unistd.h>
 
 #define BUFLEN 4096
-#define MSGS 5	/* number of messages to send */
+#define MSGS 5    /* number of messages to send */
 #define PORT 21233
 
 void readFromHostFile( char* contents) {
     FILE *fp;
     long lSize;
-
+    
     
     fp = fopen ( "hostfile.txt" , "r" );
     if( !fp ) perror("hostfile"),exit(1);
@@ -36,7 +36,7 @@ void readFromHostFile( char* contents) {
     fclose(fp);
     
     printf("file contents: %s", contents);
-//    free(buffer);
+    //    free(buffer);
 }
 
 int main(int argc, char **argv)
@@ -49,25 +49,26 @@ int main(int argc, char **argv)
     struct sockaddr_in remaddr;
     socklen_t addrlen = sizeof(remaddr);
     int fd, i, slen=sizeof(servaddr);
-    char buf[BUFLEN];    /* message buffer */
+    unsigned char buf[BUFLEN];    /* message buffer */
     int recvlen;        /* # bytes in acknowledgement message */
-    char *host = "udptestrecv";
+    char *host = "udptestsend";
     struct hostent *hp;
     
     char *filecontents;
     readFromHostFile(filecontents);
-
+    
     AckMessage ackMessages;
     SeqMessage seqMessage;
     ackMessages.type = 2;
-    ackMessages.sender = 1001;
-    ackMessages.msg_id = 9991;
-    ackMessages.proposed_seq = 1234;
+    ackMessages.sender = 2001;
+    ackMessages.msg_id = 9992;
+    ackMessages.proposed_seq = 2234;
     ackMessages.proposer = 9191919;
     DataMessage sendMessage = {1, 1002, 9991, 123};
     DataMessage rcvdDMMessage;
     AckMessage rcvdAMMdessage;
-
+    
+    
     while( (option = getopt(argc, argv, "h:c:")) != -1) {
         switch(option) {
             case 'h' :
@@ -81,32 +82,32 @@ int main(int argc, char **argv)
         }
     }
     
-	/* create a socket */
-
-	if ((fd=socket(AF_INET, SOCK_DGRAM, 0))==-1)
-		printf("socket created\n");
-
-
-	/* bind it to all local addresses and pick any port number */
-
-	memset((char *)&myaddr, 0, sizeof(myaddr));
-	myaddr.sin_family = AF_INET;
-	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	myaddr.sin_port = htons(SERVICE_PORT);
-
+    /* create a socket */
     
-	if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
-		perror("bind failed");
-		return 0;
-	}       
+    if ((fd=socket(AF_INET, SOCK_DGRAM, 0))==-1)
+        printf("socket created\n");
+    
+    
+    /* bind it to all local addresses and pick any port number */
+    
+    memset((char *)&myaddr, 0, sizeof(myaddr));
+    myaddr.sin_family = AF_INET;
+    myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    myaddr.sin_port = htons(SERVICE_PORT);
+    
+    
+    if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
+        perror("bind failed");
+        return 0;
+    }
     printf("bind succeded\n");
     /* now define servaddr, the address to whom we want to send messages */
-	/* For convenience, the host address is expressed as a numeric IP address */
-	/* that we will convert to a binary format via inet_aton */
-
-	memset((char *) &servaddr, 0, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(SERVICE_PORT);
+    /* For convenience, the host address is expressed as a numeric IP address */
+    /* that we will convert to a binary format via inet_aton */
+    
+    memset((char *) &servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(SERVICE_PORT);
     sleep(5);
     do {
         printf("host is:%s", host);
@@ -114,7 +115,7 @@ int main(int argc, char **argv)
         if (hp == NULL) {
             fprintf(stderr, "could not obtain address of %s\n", host);
             sleep(3);
-//            return 0;
+            //            return 0;
         }
         else {
             printf("managed to connect");
@@ -153,24 +154,9 @@ int main(int argc, char **argv)
             
             recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&servaddr, &slen);
             if (recvlen > 0) {
-////                            int temp;
-////                            memcpy(&temp, &buf[0], 4);
-////                            printf("the received int1 is: %d\n",ntohl(temp));
-//                            deserializeDM(buf, &rcvdMessage);
-//                printf("message received \n");
-//                printf("the received int is: %d",rcvdMessage.data);
-//                if(rcvdMessage.type == 1) {
-//                    serializeAM(&ackMessages, &buf[0]);
-//                    if (sendto(fd, buf, sizeof(ackMessages), 0, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in))==-1) {
-//                        perror("sendto failed");
-//                    }
-//                }
-//                if(rcvdMessage.type == 2) {
-//                    printf("Ack received\n");
-//                }
-                int temp;
-                memcpy(&temp, &buf[0], 4);
-                //                            printf("the received int1 is: %d",ntohl(temp));
+                            int temp;
+                            memcpy(&temp, &buf[0], 4);
+//                            printf("the received int1 is: %d",ntohl(temp));
                 if(ntohl(temp) == 1) {
                     deserializeDM(buf, &rcvdDMMessage);
                     printf("Data message received \n");
@@ -182,6 +168,16 @@ int main(int argc, char **argv)
                     deserializeAM(buf, &rcvdAMMdessage);
                     printf("Ack received\n");
                 }
+                
+
+//                            printf("the received int is: %d \n",rcvdDMMessage.data);
+                
+//                if(rcvdMessage.type == 1) {
+//
+//                }
+//                if(rcvdMessage.type == 2) {
+//
+//                }
             }
             else
                 printf("uh oh - something went wrong!\n");
@@ -189,7 +185,7 @@ int main(int argc, char **argv)
 //    } else {
 //        printf("peer not alive\n");
 //    }
-//    sleep(2);
+    sleep(2);
     return 0;
 }
 

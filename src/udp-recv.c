@@ -39,6 +39,18 @@ main(int argc, char **argv)
 	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	myaddr.sin_port = htons(SERVICE_PORT);
 
+    char hostbuffer[256];
+    char *IPbuffer;
+    struct hostent *host_entry;
+    int hostname = gethostname(hostbuffer, sizeof(hostbuffer));
+    host_entry = gethostbyname(hostbuffer);
+    IPbuffer = inet_ntoa(*((struct in_addr*)
+                           host_entry->h_addr_list[0]));
+    
+    printf("Hostname: %s\n", hostbuffer);
+    printf("Host IP: %s", IPbuffer);
+    
+    
 	if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
 		perror("bind failed");
 		return 0;
@@ -52,10 +64,11 @@ main(int argc, char **argv)
         if (recvlen > 0) {
 //            int temp;
 //            memcpy(&temp, &buf[8], 4);
-
-            deserializeDM(&buf[0], &rcvdMessage);
+            printf("message received \n");
+//            deserializeDM(&buf[0], &rcvdMessage);
 //            printf("the received int is: %d",ntohl(temp));
-            printf("the received int is: %d",rcvdMessage.data);
+//            printf("size of received is %ld", sizeof(rcvdMessage));
+//            printf("the received int is: %d",rcvdMessage.data);
         }
 		else
 			printf("uh oh - something went wrong!\n");
