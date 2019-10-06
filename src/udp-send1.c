@@ -14,12 +14,18 @@
 #define BUFLEN 4096
 #define MSGS 5    /* number of messages to send */
 #define PORT 21233
+#define MAX_STRING_SIZE 40
 
-void readFromHostFile( char* contents) {
+char pnames[3][MAX_STRING_SIZE];
+int psize;
+
+void readFromHostFile( char* myIP) {
     FILE *fp;
     long lSize;
-    
-    
+    char* contents;
+    char myIPAddress[40];
+    strcpy(myIPAddress, myIP);
+
     fp = fopen ( "hostfile.txt" , "r" );
     if( !fp ) perror("hostfile"),exit(1);
     
@@ -35,8 +41,36 @@ void readFromHostFile( char* contents) {
     
     fclose(fp);
     
-    printf("file contents: %s", contents);
-    //    free(buffer);
+    char *temp;
+    temp = strtok(contents,"\n");
+    char *IPbuffer1;
+    struct hostent *host_entry;
+
+    host_entry = gethostbyname(temp);
+    if(host_entry != NULL) {
+        IPbuffer1 = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
+        printf("size of pnames to be assigned is:%d",host_entry->h_length);
+    }
+    int index = 0;
+    while (temp != NULL)
+    {
+        if(strcmp(IPbuffer1, myIPAddress)!=0) {
+            strcpy(pnames[index], IPbuffer1);
+            index++;
+        }
+        temp = strtok (NULL, "\n");
+        if( temp != NULL) {
+            host_entry = gethostbyname(temp);
+            if(host_entry != NULL) {
+                    IPbuffer1 = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
+            }
+        }
+    }
+    for(int i = 0; i< index; i++) {
+        printf("The tokens are: %s",pnames[i]);
+    }
+    psize = index;
+
 }
 
 int main(int argc, char **argv)
@@ -55,7 +89,7 @@ int main(int argc, char **argv)
     struct hostent *hp;
     
     char *filecontents;
-    readFromHostFile(filecontents);
+//    readFromHostFile(filecontents);
     
     AckMessage ackMessages;
     SeqMessage seqMessage;
@@ -118,45 +152,49 @@ int main(int argc, char **argv)
             //            return 0;
         }
         else {
-            printf("managed to connect");
+            char *IPbuffer = inet_ntoa(*((struct in_addr*)
+                                   hp->h_addr_list[0]));
+            printf("connected to :%s", IPbuffer);
             break;
         }
     } while(1 == 1);
     printf("usnure if host connected?\n");
     /* put the host's address into the server address structure */
-    memcpy((void *)&servaddr.sin_addr, hp->h_addr_list[0], hp->h_length);
-    sleep(10);
-//    char* messageSerialized;
+    
+    char hostbuffer[256];
+    char *IPbuffer;
+    struct hostent *host_entry;
+    int hostname = gethostname(hostbuffer, sizeof(hostbuffer));
+    host_entry = gethostbyname(hostbuffer);
+    IPbuffer = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
+
+    readFromHostFile(IPbuffer);
+
+    
+    printf("address in token is %s\n", pnames[0]);
+    printf("size of pnames to be assigned is:%ld",strlen(pnames[0]));
+
+    servaddr.sin_addr.s_addr = inet_addr(pnames[0]);
+    
     serializeDM(&sendMessage, &buf[0]);
-//    sprintf(messageSerialized, "What is this?");
-//    sleep(5);
+
     /* now let's send the messages */
     printf("before send\n");
-//    sprintf(buf, "test message");
-//    if (sendto(fd, buf, sizeof(buf), 0, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in))==-1) {
-//        perror("sendto failed");
-////        exit(1);
-//    }
-//    printf("after send\n");
-//    recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&servaddr, &slen);
-//    if(recvlen > 0) {
-        for (i=0; i < MSGS; i++) {
+
+    for (i=0; i < MSGS; i++) {
 //            printf("sending Messages %ld", sizeof(messageSerialized));
             
             if (sendto(fd, buf, sizeof(sendMessage), 0, (struct sockaddr *)&servaddr, sizeof(struct sockaddr_in))==-1) {
                 perror("sendto failed");
-//                exit(1);
             }
         }
         
         for (;;) {
-            //        printf("waiting on port %d\n", SERVICE_PORT);
             
             recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&servaddr, &slen);
             if (recvlen > 0) {
                             int temp;
                             memcpy(&temp, &buf[0], 4);
-//                            printf("the received int1 is: %d",ntohl(temp));
                 if(ntohl(temp) == 1) {
                     deserializeDM(buf, &rcvdDMMessage);
                     printf("Data message received \n");
@@ -168,24 +206,10 @@ int main(int argc, char **argv)
                     deserializeAM(buf, &rcvdAMMdessage);
                     printf("Ack received\n");
                 }
-                
-
-//                            printf("the received int is: %d \n",rcvdDMMessage.data);
-                
-//                if(rcvdMessage.type == 1) {
-//
-//                }
-//                if(rcvdMessage.type == 2) {
-//
-//                }
             }
             else
                 printf("uh oh - something went wrong!\n");
         }
-//    } else {
-//        printf("peer not alive\n");
-//    }
-    sleep(2);
     return 0;
 }
 
