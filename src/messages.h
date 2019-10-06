@@ -21,6 +21,25 @@ typedef struct {
     uint32_t final_seq_proposer;
 } SeqMessage;
 
+//struct Comparator {
+//    bool operator()(SeqMessage const& s1, SeqMessage const& p2)
+//    {
+//        // return "true" if "s1" is ordered
+//        // before "s2", for example:
+//        if(s1.final_seq == s2.final_seq) {
+//            return s1.final_seq_proposer > s2.final_seq_proposer;
+//        }
+//        return s1.final_seq < s2.final_seq;
+//    }
+//};
+
+//typedef struct {
+//    int sequence;
+//    int proposed_id[20]; ///max process is 20?
+//    int seqPropId;
+//    int ackCount;
+//} ProposalCounter;
+
 void serializeDM(DataMessage* sendMessage, char* messageSerialized) {
     uint32_t temp;
     temp = htonl(sendMessage->type);
