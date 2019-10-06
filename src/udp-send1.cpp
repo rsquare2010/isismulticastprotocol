@@ -17,15 +17,15 @@
 #include <vector>
 #include <cstdlib>
 
-#define BUFLEN 4096
-#define MSGS 5    /* number of messages to send */
-#define PORT 21233
-#define MAX_STRING_SIZE 40
-#define MAX_PEERS 20
+#define BUFLEN 4096 /* buffer size to read from socket */
+#define MSGS 5    /* default number of messages to send if none provided */
+#define MAX_STRING_SIZE 40 /*We assume this to be the Max Size of IP addresses, its fine since its IPv4*/
+#define MAX_PEERS 20 /* My implementation of ISIS assumes a maximum of 20 peers.*/
 
-char pnames[MAX_PEERS][MAX_STRING_SIZE];
-int psize;
+char pnames[MAX_PEERS][MAX_STRING_SIZE]; //Array to hold the IP address of other processes.
+int psize; // NO of other processes.
 
+//Method to read from host file, resolve the IP address for the container names  and add unique IPs to an array of IP addresses.
 void readFromHostFile( char* myIP) {
     FILE *fp;
     long lSize;
@@ -41,14 +41,13 @@ void readFromHostFile( char* myIP) {
         inFile.close();
         exit(1);
     }
-    std::string line;
+    std::string line;//Each line represents a different container name.
     char *IPbuffer1;
     struct hostent *host_entry;
     const char *temp;
     int index = 0;
     while (getline(inFile, line))
     {
-        std::cout << line << std::endl;
         temp = line.c_str();
         host_entry = gethostbyname(temp);
         if(host_entry != NULL) {
@@ -60,16 +59,17 @@ void readFromHostFile( char* myIP) {
         }
     };
     inFile.close();
-    psize = index;
+    psize = index; // Total # of processes.
 
 }
 
+//Class to keep track of the highest proposal received till now, and array of it is used one per message index.
 class ProposalCounter {
 public:
-    int sequence;
-    int proposed_id[20];
-    int seqPropId;
-    int ackCount = 0;
+    int sequence; // Max of all suggested sequences.
+    int proposed_id[MAX_PEERS]; // All the processes that have suggested a sequence
+    int seqPropId; // Process id of the process that suggested sequence(variable #1)
+    int ackCount = 0; //Total no of unique acks received.
     
     // Default Constructor
     ProposalCounter()
@@ -81,14 +81,16 @@ public:
         seqPropId = 0;
         ackCount = 0;
     }
-    bool operator<(const ProposalCounter& rhs) const
-    {
-        if(sequence == rhs.sequence) {
-            return seqPropId < rhs.seqPropId;
-        }
-        return sequence < rhs.sequence;
-    }
+//    bool operator<(const ProposalCounter& rhs) const
+//    {
+//        if(sequence == rhs.sequence) {
+//            return seqPropId < rhs.seqPropId;
+//        }
+//        return sequence < rhs.sequence;
+//    }
 };
+
+//Comparator to order the SeqMessage in the priority queue, this follows the ISIS algorithm, where the SeqMessages are ordered by the sequence numbers, and in case of matching sequence numbers we use the processID as a tie breaker(we pick the process id with the lesser value).
 struct Comp{
     bool operator()(const SeqMessage& a, const SeqMessage& b){
         if(a.final_seq == b.final_seq) {
@@ -97,36 +99,36 @@ struct Comp{
         return a.final_seq > b.final_seq;
     }
 };
+
 int main(int argc, char **argv)
 {
-    int option = 0;
-    int MSG_COUNT = MSGS;
-    int messageCounter = 0;
-    int sequnceCounter = 0;
+    int option = 0; //for opt values
+    int MSG_COUNT = MSGS; //Assigning default value to message count in case one isnt supplied.
+    int messageCounter = 0; //Message counter of this process
+    int sequnceCounter = 0; // Sequence counter of this process.
+    int dropRate = 0; //Default drop rate value
+    int msDelay = 0; //Default delay value
+    char* path; //Path to hostfile, this is actually unnecessary.
+    int myId; //process Id of this process.
     
-    char* path;
-    int myId;
-    
-    struct sockaddr_in myaddr, servaddr[MAX_PEERS];
-    struct sockaddr_in remaddr;
+    struct sockaddr_in myaddr, servaddr[MAX_PEERS]; //My address and address to connect to serve
+    struct sockaddr_in remaddr; //Address of the sender in received messages.
     socklen_t addrlen = sizeof(remaddr);
     int fd, i, slen=sizeof(servaddr);
     char buf[BUFLEN];    /* message buffer */
     int recvlen;        /* # bytes in acknowledgement message */
-    struct hostent *hp;
-    
-    char *filecontents;
-//    readFromHostFile(filecontents);
+    struct hostent *hp; // To get IP address of this conatiner.
     
     AckMessage ackMessages;
     SeqMessage seqMessage;
-    DataMessage sendMessage = {1, 1002, 9991, 123};
+    DataMessage sendMessage;
     DataMessage rcvdDMMessage;
     AckMessage rcvdAMMdessage;
     SeqMessage rcvdSeqMessage;
-    std::priority_queue<SeqMessage,std::vector<SeqMessage>,Comp> pq;
     
-    while( (option = getopt(argc, argv, "h:c:")) != -1) {
+    std::priority_queue<SeqMessage,std::vector<SeqMessage>,Comp> pq;//Priority queue of received SeqMessages by this process.
+    
+    while( (option = getopt(argc, argv, "h:c:d:t:")) != -1) {
         switch(option) {
             case 'h' :
                 path = optarg;
@@ -134,22 +136,33 @@ int main(int argc, char **argv)
             case 'c' :
                 MSG_COUNT =  atoi(optarg);
                 break;
+            case 'd' :
+                dropRate = atoi(optarg);
+                break;
+            case 't':
+                msDelay = atoi(optarg);
+                break;
             default: //print_usage();
                 exit(EXIT_FAILURE);
         }
     }
+    
+    //If drop rate is greater than the messge count we ignore.
+    if(dropRate > MSG_COUNT) {
+        dropRate = 0;
+    }
+    
+    //Creating an array of the proposal counter class, one per message.
     ProposalCounter proposalCounter[MSG_COUNT];
     
     /* create a socket */
-    
     if ((fd=socket(AF_INET, SOCK_DGRAM, 0))==-1)
         printf("socket created\n");
-    
+    //Enable broadcast flag..
     int broadcastEnable=1;
     int ret=setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
     
     /* bind it to all local addresses and pick any port number */
-    
     memset((char *)&myaddr, 0, sizeof(myaddr));
     myaddr.sin_family = AF_INET;
     myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -164,59 +177,57 @@ int main(int argc, char **argv)
     /* For convenience, the host address is expressed as a numeric IP address */
     /* that we will convert to a binary format via inet_aton */
     
-    sleep(5);
+    sleep(5); //We wait 60 seconds for all the other processes to be up, apologies for the dirty implementation.
 
-    /* put the host's address into the server address structure */
-    
+    //Find this process's ip address after finding its name
     char hostbuffer[256];
     char *IPbuffer;
     struct hostent *host_entry;
     int hostname = gethostname(hostbuffer, sizeof(hostbuffer));
-    int randNumber = rand() % 1000;
-    myId = hostbuffer[0] + hostbuffer [1] + hostbuffer[3] + hostbuffer[4] + randNumber;
-    printf("my Id is:%d", myId);
     host_entry = gethostbyname(hostbuffer);
     IPbuffer = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
 
+    //The IP address of this process
     printf("my ip is: %s\n", IPbuffer);
     readFromHostFile(IPbuffer);
 
+    /*We derive a unique id for each process by getting the sum of the ascii values of the first 4 characters fo the container name and a random number between 0 and 999.*/
+    int randNumber = rand() % 1000;
+    myId = hostbuffer[0] + hostbuffer [1] + hostbuffer[3] + hostbuffer[4] + randNumber;
+    printf("my Id is:%d", myId);
+    
+    /* put the host's address into the server address structure */
     for (int i = 0; i < psize; i++) {
         memset((char *) &servaddr[i], 0, sizeof(servaddr[i]));
         servaddr[i].sin_family = AF_INET;
         servaddr[i].sin_port = htons(SERVICE_PORT);
         servaddr[i].sin_addr.s_addr = inet_addr(pnames[i]);
     }
-    /* now let's send the messages */
-
     
-    for (i=0; i < MSGS; i++) {
+    
+    /* now let's send the messages */
+    for (i=0; i < MSG_COUNT; i++) {
+        if(dropRate> 0 && (i % dropRate) == 0) {//If we need to drop messages.
+            messageCounter++;
+            continue;
+        }
         for (int pid = 0; pid < psize; pid ++) {
             sendMessage.message_id = messageCounter;
             sendMessage.sender = myId;
             serializeDM(&sendMessage, &buf[0]);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(msDelay));
             if (sendto(fd, buf, sizeof(sendMessage), 0, (struct sockaddr *)&servaddr[pid], sizeof(struct sockaddr_in))==-1) {
                 perror("sendto failed");
             }
         }
         messageCounter++;
     }
-    
-        auto Start = std::chrono::high_resolution_clock::now();
-        while(1) {
-            auto End = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double, std::milli> Elapsed = End - Start;
-            
-//            if (Elapsed.count() >= 3000.0) {
-//                printf("leaving loop");
-//                break;
-//            }
-            recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&remaddr, &addrlen);
+        while(1) { //Infinite receive..
+            recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&remaddr, &addrlen);//Receive anything from anyone
             if (recvlen > 0) {
                             int temp;
-                            memcpy(&temp, &buf[0], 4);
-                if(ntohl(temp) == 1) {
+                            memcpy(&temp, &buf[0], 4); //We get the type of message
+                if(ntohl(temp) == 1) { //If its data type we create an ack and send it back to the sender.
                     deserializeDM(buf, &rcvdDMMessage);
                     ackMessages.type = 2;
                     ackMessages.sender = rcvdDMMessage.sender;
@@ -229,20 +240,20 @@ int main(int argc, char **argv)
                     
                     int len=50;
                     char ipbuffer[len];
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(msDelay));
                     if (sendto(fd, buf, sizeof(ackMessages), 0, (struct sockaddr *)&remaddr, sizeof(struct sockaddr_in))==-1) {
                         perror("sendto failed");
                     }
-                } else if (ntohl(temp) == 2) {
+                } else if (ntohl(temp) == 2) { //If an ack is received, and we have received ACKs from all the processes we create the SeqMessage and broadcast it. otherwise we added it to the proposal class for this particular messageid.
                     deserializeAM(buf, &rcvdAMMdessage);
                     int messageId = rcvdAMMdessage.msg_id;
                     int ackCount = proposalCounter[messageId].ackCount;
-                    if(proposalCounter[messageId].ackCount == 0) {
+                    if(proposalCounter[messageId].ackCount == 0) { //If first Ack Message add directly.
                         proposalCounter[messageId].sequence = rcvdAMMdessage.proposed_seq;
                         proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
                         proposalCounter[messageId].seqPropId = rcvdAMMdessage.proposer;
                         proposalCounter[messageId].ackCount = 1;
-                    } else {
+                    } else { //Check if its a duplicate before add.
                         int isDuplicate = 0;
                         for (int i = 0; i < ackCount; i++) {
                             if (proposalCounter[messageId].proposed_id[i] == rcvdAMMdessage.proposer) {
@@ -268,7 +279,7 @@ int main(int argc, char **argv)
                                 }
                             }
                         }
-                        if(ackCount == psize - 1) {
+                        if(ackCount == psize - 1) { //If we get all messages send Seq to everyone.
                             seqMessage.type = 3;
                             seqMessage.sender = myId;
                             seqMessage.msg_id = messageId;
@@ -276,23 +287,24 @@ int main(int argc, char **argv)
                             seqMessage.final_seq_proposer = proposalCounter[messageId].seqPropId;
                             serializeSM(&seqMessage, &buf[0]);
                             for(int i = 0; i < psize; i++) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                                std::this_thread::sleep_for(std::chrono::milliseconds(msDelay));
                                 if (sendto(fd, buf, sizeof(seqMessage), 0, (struct sockaddr *)&servaddr[i], sizeof(struct sockaddr_in))==-1) {
                                     perror("sendto failed");
                                 }
                             }
                         }
-                } else if (ntohl(temp) == 3) {
+                } else if (ntohl(temp) == 3) { //If we receive a SeqMessage we add it to the priority queue.
                     deserializeSM(buf, &rcvdSeqMessage);
+                    SeqMessage sm = rcvdSeqMessage;
                     pq.push(rcvdSeqMessage);
-                    if(pq.size() >= psize * MSG_COUNT ) {
+                    if(pq.size() >= sequnceCounter ) { //If the priority queue has as many messages as the messages received, we display the elements of the queue in order.
                         printf("============================Ordering==================\n");
                         while (pq.size() > 0) {
                             SeqMessage sm = pq.top();
                             pq.pop();
                             printf("Process id %d processed Message %d from sender %d with sequence %d proposed by %d\n", myId,sm.msg_id, sm.sender, sm.final_seq, sm.final_seq_proposer);
                         }
-                        
+
                     }
                 }
                 
