@@ -60,48 +60,6 @@ void readFromHostFile( char* myIP) {
         }
     };
     inFile.close();
-//    fp = fopen ( "hostfile.txt" , "r" );
-//    if( !fp ) perror("hostfile"),exit(1);
-//
-//    fseek( fp , 0L , SEEK_END);
-//    lSize = ftell( fp );
-//    rewind( fp );
-//
-//    contents = calloc( 1, lSize+1 );
-//    if( !contents ) fclose(fp),fputs("memory alloc fails",stderr),exit(1);
-//
-//    if( 1!=fread( contents , lSize, 1 , fp) )
-//        fclose(fp),free(contents),fputs("entire read fails",stderr),exit(1);
-//
-//    fclose(fp);
-//
-//    char *temp;
-//    temp = strtok(contents,"\n");
-//    char *IPbuffer1;
-//    struct hostent *host_entry;
-//
-//    host_entry = gethostbyname(temp);
-//    if(host_entry != NULL) {
-//        IPbuffer1 = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
-//    }
-////    printf("IPB:%s",IPbuffer1);
-//    int index = 0;
-//    while (temp != NULL)
-//    {
-//        printf("IPB:%s",IPbuffer1);
-//        if((IPbuffer1 != NULL) && strcmp(IPbuffer1, myIPAddress)!=0) {
-//            strcpy(pnames[index], IPbuffer1);
-//            index++;
-//        }
-//        temp = strtok (NULL, "\n");
-//        IPbuffer1 = NULL;
-//        if( temp != NULL) {
-//            host_entry = gethostbyname(temp);
-//            if(host_entry != NULL) {
-//                    IPbuffer1 = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
-//            }
-//        }
-//    }
     psize = index;
 
 }
@@ -126,7 +84,7 @@ public:
     bool operator<(const ProposalCounter& rhs) const
     {
         if(sequence == rhs.sequence) {
-            return seqPropId > rhs.seqPropId;
+            return seqPropId < rhs.seqPropId;
         }
         return sequence < rhs.sequence;
     }
@@ -134,7 +92,7 @@ public:
 struct Comp{
     bool operator()(const SeqMessage& a, const SeqMessage& b){
         if(a.final_seq == b.final_seq) {
-            return a.final_seq_proposer < b.final_seq_proposer;
+            return a.final_seq_proposer > b.final_seq_proposer;
         }
         return a.final_seq > b.final_seq;
     }
@@ -229,10 +187,6 @@ int main(int argc, char **argv)
         servaddr[i].sin_port = htons(SERVICE_PORT);
         servaddr[i].sin_addr.s_addr = inet_addr(pnames[i]);
     }
-    
-    
-    
-
     /* now let's send the messages */
 
     
@@ -241,15 +195,23 @@ int main(int argc, char **argv)
             sendMessage.message_id = messageCounter;
             sendMessage.sender = myId;
             serializeDM(&sendMessage, &buf[0]);
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
             if (sendto(fd, buf, sizeof(sendMessage), 0, (struct sockaddr *)&servaddr[pid], sizeof(struct sockaddr_in))==-1) {
                 perror("sendto failed");
             }
         }
         messageCounter++;
     }
-        
-        for (;;) {
+    
+        auto Start = std::chrono::high_resolution_clock::now();
+        while(1) {
+            auto End = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> Elapsed = End - Start;
             
+//            if (Elapsed.count() >= 3000.0) {
+//                printf("leaving loop");
+//                break;
+//            }
             recvlen = recvfrom(fd, buf, BUFLEN, 0, (struct sockaddr *)&remaddr, &addrlen);
             if (recvlen > 0) {
                             int temp;
@@ -264,13 +226,10 @@ int main(int argc, char **argv)
                     sequnceCounter++;
                     
                     serializeAM(&ackMessages, &buf[0]);
-                    printf("id  of received message: %d\n",rcvdDMMessage.message_id);
-                    printf("received message sender:%d\n", rcvdDMMessage.sender);
-                    printf("ack from %d sender:%d\n", myId,ackMessages.proposed_seq);
-//                    printf("received message sender:%d\n", rcvdDMMessage.sender);
                     
                     int len=50;
                     char ipbuffer[len];
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     if (sendto(fd, buf, sizeof(ackMessages), 0, (struct sockaddr *)&remaddr, sizeof(struct sockaddr_in))==-1) {
                         perror("sendto failed");
                     }
@@ -299,7 +258,6 @@ int main(int argc, char **argv)
                                     proposalCounter[messageId].ackCount++;
                                 }
                             } else if (rcvdAMMdessage.proposed_seq > proposalCounter[messageId].sequence) {
-//                                proposalCounter[messageId].seqPropId)
                                     proposalCounter[messageId].sequence = rcvdAMMdessage.proposed_seq;
                                     proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
                                     proposalCounter[messageId].seqPropId = rcvdAMMdessage.proposer;
@@ -317,31 +275,31 @@ int main(int argc, char **argv)
                             seqMessage.final_seq = proposalCounter[messageId].sequence;
                             seqMessage.final_seq_proposer = proposalCounter[messageId].seqPropId;
                             serializeSM(&seqMessage, &buf[0]);
-                            printf("send proposal for %d with sid: %d\n", messageId, seqMessage.final_seq);
                             for(int i = 0; i < psize; i++) {
+                                std::this_thread::sleep_for(std::chrono::milliseconds(500));
                                 if (sendto(fd, buf, sizeof(seqMessage), 0, (struct sockaddr *)&servaddr[i], sizeof(struct sockaddr_in))==-1) {
                                     perror("sendto failed");
                                 }
                             }
                         }
-                    printf("Ack received%d\n",messageId);
                 } else if (ntohl(temp) == 3) {
                     deserializeSM(buf, &rcvdSeqMessage);
                     pq.push(rcvdSeqMessage);
-                    printf("Process id %d processed Message %d from sender %d with sequence %d proposed by %d\n", myId,rcvdSeqMessage.msg_id, rcvdSeqMessage.sender, rcvdSeqMessage.final_seq, rcvdSeqMessage.final_seq_proposer);
-                    
-                    SeqMessage sm = pq.top();
-                    printf("Process id %d processed Message %d from sender %d with sequence %d proposed by %d\n", myId,sm.msg_id, sm.sender, sm.final_seq, sm.final_seq_proposer);
-//                    printf("SM mID: %d\n",rcvdSeqMessage.msg_id);
-//                    printf("SM sender:%d\n", rcvdSeqMessage.sender);
-//                    printf("SM final seq: %d\n",rcvdSeqMessage.final_seq);
-//                    printf("SM final seq prop:%d\n", rcvdSeqMessage.final_seq_proposer);
+                    if(pq.size() >= psize * MSG_COUNT ) {
+                        printf("============================Ordering==================\n");
+                        while (pq.size() > 0) {
+                            SeqMessage sm = pq.top();
+                            pq.pop();
+                            printf("Process id %d processed Message %d from sender %d with sequence %d proposed by %d\n", myId,sm.msg_id, sm.sender, sm.final_seq, sm.final_seq_proposer);
+                        }
+                        
+                    }
                 }
                 
             }
-            else
+            else {
                 printf("uh oh - something went wrong!\n");
-            
+            }
         }
     return 0;
 }
