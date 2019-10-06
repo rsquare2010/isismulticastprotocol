@@ -17,7 +17,7 @@
 #define MAX_STRING_SIZE 40
 #define MAX_PEERS 20
 
-char pnames[3][MAX_STRING_SIZE];
+char pnames[MAX_PEERS][MAX_STRING_SIZE];
 int psize;
 
 void readFromHostFile( char* myIP) {
@@ -82,6 +82,7 @@ int main(int argc, char **argv)
     int MSG_COUNT = 0;
     int messageCounter = 0;
     int sequnceCounter = 0;
+    
     char* path;
     int myId;
     
@@ -101,6 +102,7 @@ int main(int argc, char **argv)
     DataMessage sendMessage = {1, 1002, 9991, 123};
     DataMessage rcvdDMMessage;
     AckMessage rcvdAMMdessage;
+    SeqMessage rcvdSeqMessage;
     
     
     while( (option = getopt(argc, argv, "h:c:")) != -1) {
@@ -115,6 +117,20 @@ int main(int argc, char **argv)
                 exit(EXIT_FAILURE);
         }
     }
+    ProposalCounter propCounter = {0,{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},0,0};
+    ProposalCounter proposalCounter[MSG_COUNT];
+    for (int i =0; i < MSG_COUNT; i++) {
+        proposalCounter[i].sequence = 0;
+        proposalCounter[i].seqPropId = 0;
+        for(int j = 0; j < 20; j++) {
+            proposalCounter[i].proposed_id[j] = 0;
+        }
+        proposalCounter[i].ackCount = 0;
+    }
+    
+//    for(int i =0; i< MSG_COUNT; i++) {
+//        proposalCounter[i].ackCount = 0;
+//    }
     
     /* create a socket */
     
@@ -199,6 +215,8 @@ int main(int argc, char **argv)
                     serializeAM(&ackMessages, &buf[0]);
                     printf("id  of received message: %d\n",rcvdDMMessage.message_id);
                     printf("received message sender:%d\n", rcvdDMMessage.sender);
+                    printf("ack from %d sender:%d\n", myId,ackMessages.proposed_seq);
+//                    printf("received message sender:%d\n", rcvdDMMessage.sender);
                     
                     int len=50;
                     char ipbuffer[len];
@@ -207,7 +225,64 @@ int main(int argc, char **argv)
                     }
                 } else if (ntohl(temp) == 2) {
                     deserializeAM(buf, &rcvdAMMdessage);
-                    printf("Ack received%d\n",rcvdAMMdessage.msg_id);
+                    int messageId = rcvdAMMdessage.msg_id;
+                    int ackCount = proposalCounter[messageId].ackCount;
+//                    if(proposalCounter[messageId].ackCount == 0) {
+//                        proposalCounter[messageId].sequence = rcvdAMMdessage.proposed_seq;
+//                        proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
+//                        proposalCounter[messageId].seqPropId = rcvdAMMdessage.proposer;
+//                        proposalCounter[messageId].ackCount = 1;
+//                    } else {
+//                        int isDuplicate = 0;
+//                        printf("ack count is:%d",ackCount);
+//                        for (int i = 0; i < ackCount; i++) {
+//                            if (proposalCounter[messageId].proposed_id[i] == rcvdAMMdessage.proposer) {
+//                                isDuplicate = 1;
+//                            }
+//                        }
+//                        if(isDuplicate == 1) {
+//                            if (rcvdAMMdessage.proposed_seq == proposalCounter[messageId].sequence) {
+//                                if(rcvdAMMdessage.proposer < proposalCounter[messageId].seqPropId) {
+//                                    proposalCounter[messageId].sequence = rcvdAMMdessage.proposed_seq;
+//                                    proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
+//                                    proposalCounter[messageId].seqPropId = rcvdAMMdessage.proposer;
+//                                    proposalCounter[messageId].ackCount++;
+//                                }
+//                            } else if (rcvdAMMdessage.proposed_seq > proposalCounter[messageId].sequence) {
+////                                proposalCounter[messageId].seqPropId)
+//                                    proposalCounter[messageId].sequence = rcvdAMMdessage.proposed_seq;
+//                                    proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
+//                                    proposalCounter[messageId].seqPropId = rcvdAMMdessage.proposer;
+//                                    proposalCounter[messageId].ackCount++;
+//                                } else {
+//                                    proposalCounter[messageId].proposed_id[ackCount] = rcvdAMMdessage.proposer;
+//                                    proposalCounter[messageId].ackCount++;
+//                                }
+//                            }
+//                        }
+//                        if(ackCount == MSG_COUNT - 1) {
+//                            seqMessage.type = 3;
+//                            seqMessage.sender = myId;
+//                            seqMessage.msg_id = messageId;
+//                            seqMessage.final_seq = proposalCounter[messageId].sequence;
+//                            seqMessage.final_seq_proposer = proposalCounter[messageId].seqPropId;
+//                            serializeSM(&seqMessage, &buf[0]);
+//                            printf("send proposal for %d with sid: %d", messageId, seqMessage.final_seq);
+////                            for(int i = 0; i < psize; i++) {
+////                                if (sendto(fd, buf, sizeof(seqMessage), 0, (struct sockaddr *)&servaddr[i], sizeof(struct sockaddr_in))==-1) {
+////                                    perror("sendto failed");
+////                                }
+////                            }
+//                        }
+                    printf("Ack received%d\n",messageId);
+                printf("Ack count%d\n",ackCount);
+                } else if (ntohl(temp) == 3) {
+                    printf("SM received");
+//                    deserializeSM(buf, &rcvdSeqMessage);
+//                    printf("SM mID: %d\n",rcvdSeqMessage.msg_id);
+//                    printf("SM sender:%d\n", rcvdSeqMessage.sender);
+//                    printf("SM final seq: %d\n",rcvdSeqMessage.final_seq);
+//                    printf("SM final seq prop:%d\n", rcvdSeqMessage.final_seq_proposer);
                 }
             }
             else
