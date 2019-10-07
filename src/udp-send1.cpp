@@ -21,6 +21,7 @@
 #define MSGS 5    /* default number of messages to send if none provided */
 #define MAX_STRING_SIZE 40 /*We assume this to be the Max Size of IP addresses, its fine since its IPv4*/
 #define MAX_PEERS 20 /* My implementation of ISIS assumes a maximum of 20 peers.*/
+#define INITIAL_WAIT_TIME 60 /* Time spent waiting for all the proceesses to be up. */
 
 char pnames[MAX_PEERS][MAX_STRING_SIZE]; //Array to hold the IP address of other processes.
 int psize; // NO of other processes.
@@ -81,13 +82,6 @@ public:
         seqPropId = 0;
         ackCount = 0;
     }
-//    bool operator<(const ProposalCounter& rhs) const
-//    {
-//        if(sequence == rhs.sequence) {
-//            return seqPropId < rhs.seqPropId;
-//        }
-//        return sequence < rhs.sequence;
-//    }
 };
 
 //Comparator to order the SeqMessage in the priority queue, this follows the ISIS algorithm, where the SeqMessages are ordered by the sequence numbers, and in case of matching sequence numbers we use the processID as a tie breaker(we pick the process id with the lesser value).
@@ -177,7 +171,7 @@ int main(int argc, char **argv)
     /* For convenience, the host address is expressed as a numeric IP address */
     /* that we will convert to a binary format via inet_aton */
     
-    sleep(5); //We wait 60 seconds for all the other processes to be up, apologies for the dirty implementation.
+    sleep(INITIAL_WAIT_TIME); //We wait 60 seconds for all the other processes to be up, apologies for the dirty implementation.
 
     //Find this process's ip address after finding its name
     char hostbuffer[256];
@@ -194,7 +188,7 @@ int main(int argc, char **argv)
     /*We derive a unique id for each process by getting the sum of the ascii values of the first 4 characters fo the container name and a random number between 0 and 999.*/
     int randNumber = rand() % 1000;
     myId = hostbuffer[0] + hostbuffer [1] + hostbuffer[3] + hostbuffer[4] + randNumber;
-    printf("my Id is:%d", myId);
+    printf("my Id is:%d\n", myId);
     
     /* put the host's address into the server address structure */
     for (int i = 0; i < psize; i++) {
@@ -212,6 +206,7 @@ int main(int argc, char **argv)
             continue;
         }
         for (int pid = 0; pid < psize; pid ++) {
+            sendMessage.type = 1;
             sendMessage.message_id = messageCounter;
             sendMessage.sender = myId;
             serializeDM(&sendMessage, &buf[0]);
